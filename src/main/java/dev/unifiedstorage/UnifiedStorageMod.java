@@ -72,7 +72,7 @@ public final class UnifiedStorageMod implements ModInitializer {
         player.openMenu(new SimpleMenuProvider(
                 (containerId, inventory, openingPlayer) ->
                         new UniversalStorageScreenHandler(containerId, inventory),
-                Component.literal("Universal Storage + Crafting")
+                Component.translatable("container.crafting")
         ));
     }
 
