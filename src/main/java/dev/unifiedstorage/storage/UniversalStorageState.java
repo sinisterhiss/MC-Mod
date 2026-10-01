@@ -29,7 +29,7 @@ public final class UniversalStorageState extends PersistentState {
     private static final Type<UniversalStorageState> TYPE = new Type<>(
             UniversalStorageState::new,
             UniversalStorageState::fromNbt,
-            DataFixTypes.SAVED_DATA
+            DataFixTypes.LEVEL
     );
 
     public static UniversalStorageState get(ServerPlayerEntity player) {
