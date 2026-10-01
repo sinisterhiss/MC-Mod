@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.StackedItemContents;
 import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.CraftingContainer;
@@ -44,6 +45,8 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
     private static final int PLAYER_SLOT_START = STORAGE_SLOT_END;
     private static final int PLAYER_SLOT_END = PLAYER_SLOT_START + 36;
 
+    private static final int STORAGE_X = 176;
+
     private final Inventory playerInventory;
     private final Container storageInventory;
     private final ContainerData data = new SimpleContainerData(2);
@@ -76,21 +79,22 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
         addDataSlots(this.data);
 
-        addResultSlot(playerInventory.player, 300, 35);
-        addCraftingGridSlots(206, 17);
+        // Vanilla crafting-table layout in the normal 176px panel.
+        addResultSlot(playerInventory.player, 124, 35);
+        addCraftingGridSlots(30, 17);
+        addStandardInventorySlots(playerInventory, 8, 84);
 
+        // Universal Storage lives immediately to the right of the normal crafting panel.
         for (int row = 0; row < 6; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlot(new UniversalStorageSlot(
                         storageInventory,
                         col + row * 9,
-                        8 + col * 18,
+                        STORAGE_X + 8 + col * 18,
                         18 + row * 18
                 ));
             }
         }
-
-        addStandardInventorySlots(playerInventory, 8, 140);
     }
 
     public int getPage() {
@@ -99,6 +103,18 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
     public int getPageCount() {
         return Math.max(1, data.get(1));
+    }
+
+    @Override
+    public void fillCraftSlotsStackedContents(StackedItemContents contents) {
+        super.fillCraftSlotsStackedContents(contents);
+
+        // Make the vanilla recipe book count Universal Storage as part of the available supply.
+        if (state != null && playerId != null) {
+            for (ItemStack stack : state.items(playerId)) {
+                contents.accountSimpleStack(stack);
+            }
+        }
     }
 
     @Override
