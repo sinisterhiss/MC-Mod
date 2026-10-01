@@ -1,5 +1,6 @@
 package dev.unifiedstorage;
 
+import dev.unifiedstorage.net.ModNetworking;
 import dev.unifiedstorage.screen.UniversalStorageScreenHandler;
 import dev.unifiedstorage.storage.TerminalState;
 import net.fabricmc.api.ModInitializer;
@@ -32,14 +33,22 @@ public final class UnifiedStorageMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        ModNetworking.init();
+
         UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> {
             if (level.isClientSide() || hand != InteractionHand.MAIN_HAND || !(player instanceof ServerPlayer serverPlayer)) {
                 return InteractionResult.PASS;
             }
 
             BlockPos pos = hitResult.getBlockPos();
-            BlockState state = level.getBlockState(pos);
-            if (!isSupportedContainer(state)) {
+            BlockState blockState = level.getBlockState(pos);
+
+            if (blockState.is(Blocks.CRAFTING_TABLE)) {
+                openUnifiedCrafting(serverPlayer);
+                return InteractionResult.SUCCESS_SERVER;
+            }
+
+            if (!isSupportedContainer(blockState)) {
                 return InteractionResult.PASS;
             }
 
@@ -48,11 +57,7 @@ public final class UnifiedStorageMod implements ModInitializer {
                 return InteractionResult.PASS;
             }
 
-            serverPlayer.openMenu(new SimpleMenuProvider(
-                    (containerId, inventory, openingPlayer) ->
-                            new UniversalStorageScreenHandler(containerId, inventory),
-                    Component.literal("Universal Storage")
-            ));
+            openUnifiedCrafting(serverPlayer);
             return InteractionResult.SUCCESS_SERVER;
         });
 
@@ -61,6 +66,14 @@ public final class UnifiedStorageMod implements ModInitializer {
                 TerminalState.get(serverLevel).unmark(pos);
             }
         });
+    }
+
+    public static void openUnifiedCrafting(ServerPlayer player) {
+        player.openMenu(new SimpleMenuProvider(
+                (containerId, inventory, openingPlayer) ->
+                        new UniversalStorageScreenHandler(containerId, inventory),
+                Component.literal("Universal Storage + Crafting")
+        ));
     }
 
     public static boolean isSupportedContainer(BlockState state) {
