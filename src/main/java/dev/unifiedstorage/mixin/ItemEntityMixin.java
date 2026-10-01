@@ -1,11 +1,11 @@
 package dev.unifiedstorage.mixin;
 
 import dev.unifiedstorage.storage.UniversalStorageState;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,32 +15,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.UUID;
 
 /**
- * Vanilla gets first chance to put a pickup in the player's normal inventory.
- * Whatever remains after vanilla's attempt goes to universal storage.
+ * Vanilla fills the player's inventory first. Any pickup remainder is moved into Universal Storage.
  */
 @Mixin(ItemEntity.class)
 public abstract class ItemEntityMixin {
     @Shadow private int pickupDelay;
-    @Shadow @Nullable private UUID owner;
+    @Shadow @Nullable private UUID target;
 
-    @Inject(method = "onPlayerCollision", at = @At("TAIL"))
-    private void unifiedstorage$overflowPickup(PlayerEntity player, CallbackInfo ci) {
-        if (!(player instanceof ServerPlayerEntity serverPlayer)) return;
-        if (pickupDelay != 0) return;
-        if (owner != null && !owner.equals(player.getUuid())) return;
+    @Inject(method = "playerTouch", at = @At("TAIL"))
+    private void unifiedstorage$overflowPickup(Player player, CallbackInfo ci) {
+        if (!(player instanceof ServerPlayer serverPlayer)) return;
+        if (this.pickupDelay != 0) return;
+        if (this.target != null && !this.target.equals(player.getUUID())) return;
 
         ItemEntity self = (ItemEntity) (Object) this;
         if (self.isRemoved()) return;
 
-        ItemStack remainder = self.getStack();
+        ItemStack remainder = self.getItem();
         if (remainder.isEmpty()) return;
 
-        UniversalStorageState storage = UniversalStorageState.get(serverPlayer);
-        storage.insert(serverPlayer.getUuid(), remainder);
-
+        UniversalStorageState.get(serverPlayer).insert(serverPlayer.getUUID(), remainder);
         if (remainder.isEmpty()) {
-            // Vanilla did not remove the entity because the normal inventory was full.
-            // The server now owns the items in persistent universal storage, so remove the entity.
             self.discard();
         }
     }

@@ -1,38 +1,36 @@
 package dev.unifiedstorage.mixin;
 
 import dev.unifiedstorage.storage.UniversalStorageState;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Makes the player's main inventory/hotbar use the same 999-count exact-item stacking rules
- * as Universal Storage. Armor/special GUI slots can still impose their own one-item limits.
+ * Player inventory uses 999-count stacks and exact component equality, including for damaged items.
  */
-@Mixin(PlayerInventory.class)
+@Mixin(Inventory.class)
 public abstract class PlayerInventoryMixin {
-    /** Overrides Inventory's inherited default of 99 for PlayerInventory. */
-    public int getMaxCountPerStack() {
+    public int getMaxStackSize() {
         return UniversalStorageState.MAX_STACK_SIZE;
     }
 
-    /**
-     * Vanilla deliberately refuses to merge damaged stacks. We replace insertion so any two
-     * ItemStacks with the same item and exactly the same components (including DAMAGE,
-     * enchantments, names, potion data, etc.) can combine up to 999.
-     */
-    @Inject(
-            method = "insertStack(ILnet/minecraft/item/ItemStack;)Z",
-            at = @At("HEAD"),
-            cancellable = true
-    )
-    private void unifiedstorage$insertExactStacks(int requestedSlot,
-                                                   ItemStack incoming,
-                                                   CallbackInfoReturnable<Boolean> cir) {
-        PlayerInventory inventory = (PlayerInventory) (Object) this;
+    public int getMaxStackSize(ItemStack stack) {
+        return UniversalStorageState.MAX_STACK_SIZE;
+    }
+
+    @Inject(method = "add(ILnet/minecraft/world/item/ItemStack;)Z", at = @At("HEAD"), cancellable = true)
+    private void unifiedstorage$insertExactStacks(
+            int requestedSlot,
+            ItemStack incoming,
+            CallbackInfoReturnable<Boolean> cir
+    ) {
+        Inventory inventory = (Inventory) (Object) this;
+
+        // Leave unusual equipment-slot targeted insertions to vanilla.
+        if (requestedSlot >= Inventory.INVENTORY_SIZE) return;
 
         if (incoming.isEmpty()) {
             cir.setReturnValue(false);
@@ -44,29 +42,28 @@ public abstract class PlayerInventoryMixin {
         if (requestedSlot >= 0) {
             moveIntoSlot(inventory, requestedSlot, incoming);
         } else {
-            // Preserve vanilla's useful preference order: selected hotbar, offhand, then main.
-            moveIntoMatchingSlot(inventory, inventory.selectedSlot, incoming);
-            moveIntoMatchingSlot(inventory, PlayerInventory.OFF_HAND_SLOT, incoming);
+            int selected = inventory.getSelectedSlot();
+            moveIntoMatchingSlot(inventory, selected, incoming);
+            moveIntoMatchingSlot(inventory, Inventory.SLOT_OFFHAND, incoming);
 
-            for (int i = 0; i < PlayerInventory.MAIN_SIZE && !incoming.isEmpty(); i++) {
-                if (i == inventory.selectedSlot) continue;
+            for (int i = 0; i < Inventory.INVENTORY_SIZE && !incoming.isEmpty(); i++) {
+                if (i == selected) continue;
                 moveIntoMatchingSlot(inventory, i, incoming);
             }
 
-            // Only main inventory/hotbar slots are valid automatic destinations for new stacks.
             while (!incoming.isEmpty()) {
-                int empty = inventory.getEmptySlot();
+                int empty = inventory.getFreeSlot();
                 if (empty < 0) break;
 
                 int moved = Math.min(UniversalStorageState.MAX_STACK_SIZE, incoming.getCount());
-                inventory.setStack(empty, incoming.split(moved));
+                inventory.setItem(empty, incoming.split(moved));
             }
         }
 
         boolean movedAnything = incoming.getCount() < before;
         if (movedAnything) {
-            inventory.markDirty();
-        } else if (inventory.player.isInCreativeMode()) {
+            inventory.setChanged();
+        } else if (inventory.player.hasInfiniteMaterials()) {
             incoming.setCount(0);
             movedAnything = true;
         }
@@ -74,38 +71,38 @@ public abstract class PlayerInventoryMixin {
         cir.setReturnValue(movedAnything);
     }
 
-    private static void moveIntoMatchingSlot(PlayerInventory inventory, int slot, ItemStack incoming) {
-        if (incoming.isEmpty() || slot < 0 || slot >= inventory.size()) return;
+    private static void moveIntoMatchingSlot(Inventory inventory, int slot, ItemStack incoming) {
+        if (incoming.isEmpty() || slot < 0 || slot >= inventory.getContainerSize()) return;
 
-        ItemStack existing = inventory.getStack(slot);
+        ItemStack existing = inventory.getItem(slot);
         if (existing.isEmpty()) return;
-        if (!ItemStack.areItemsAndComponentsEqual(existing, incoming)) return;
+        if (!ItemStack.isSameItemSameComponents(existing, incoming)) return;
 
         int room = UniversalStorageState.MAX_STACK_SIZE - existing.getCount();
         if (room <= 0) return;
 
         int moved = Math.min(room, incoming.getCount());
-        existing.increment(moved);
-        incoming.decrement(moved);
+        existing.grow(moved);
+        incoming.shrink(moved);
     }
 
-    private static void moveIntoSlot(PlayerInventory inventory, int slot, ItemStack incoming) {
-        if (incoming.isEmpty() || slot < 0 || slot >= inventory.size()) return;
+    private static void moveIntoSlot(Inventory inventory, int slot, ItemStack incoming) {
+        if (incoming.isEmpty() || slot < 0 || slot >= Inventory.INVENTORY_SIZE) return;
 
-        ItemStack existing = inventory.getStack(slot);
+        ItemStack existing = inventory.getItem(slot);
         if (existing.isEmpty()) {
             int moved = Math.min(UniversalStorageState.MAX_STACK_SIZE, incoming.getCount());
-            inventory.setStack(slot, incoming.split(moved));
+            inventory.setItem(slot, incoming.split(moved));
             return;
         }
 
-        if (!ItemStack.areItemsAndComponentsEqual(existing, incoming)) return;
+        if (!ItemStack.isSameItemSameComponents(existing, incoming)) return;
 
         int room = UniversalStorageState.MAX_STACK_SIZE - existing.getCount();
         if (room <= 0) return;
 
         int moved = Math.min(room, incoming.getCount());
-        existing.increment(moved);
-        incoming.decrement(moved);
+        existing.grow(moved);
+        incoming.shrink(moved);
     }
 }
