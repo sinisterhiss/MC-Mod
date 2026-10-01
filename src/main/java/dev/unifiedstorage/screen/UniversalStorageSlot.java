@@ -1,23 +1,22 @@
 package dev.unifiedstorage.screen;
 
 import dev.unifiedstorage.storage.UniversalStorageState;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.Slot;
+import net.minecraft.world.Container;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
-/** A Universal Storage slot holds up to 999 exactly-identical items. */
 public final class UniversalStorageSlot extends Slot {
-    public UniversalStorageSlot(Inventory inventory, int index, int x, int y) {
-        super(inventory, index, x, y);
+    public UniversalStorageSlot(Container container, int slot, int x, int y) {
+        super(container, slot, x, y);
     }
 
     @Override
-    public int getMaxItemCount() {
+    public int getMaxStackSize() {
         return UniversalStorageState.MAX_STACK_SIZE;
     }
 
     @Override
-    public int getMaxItemCount(ItemStack stack) {
+    public int getMaxStackSize(ItemStack stack) {
         return UniversalStorageState.MAX_STACK_SIZE;
     }
 }

@@ -1,69 +1,111 @@
 package dev.unifiedstorage.screen;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
 
-public final class UniversalStorageScreen extends HandledScreen<UniversalStorageScreenHandler> {
-    private static final Identifier TEXTURE = Identifier.ofVanilla("textures/gui/container/generic_54.png");
+public final class UniversalStorageScreen extends AbstractContainerScreen<UniversalStorageScreenHandler> {
+    private static final Identifier TEXTURE =
+            Identifier.withDefaultNamespace("textures/gui/container/generic_54.png");
 
-    private ButtonWidget previous;
-    private ButtonWidget next;
+    private Button previous;
+    private Button next;
 
-    public UniversalStorageScreen(UniversalStorageScreenHandler handler, PlayerInventory inventory, Text title) {
-        super(handler, inventory, title);
-        this.backgroundHeight = 222;
-        this.playerInventoryTitleY = this.backgroundHeight - 94;
+    public UniversalStorageScreen(
+            UniversalStorageScreenHandler menu,
+            Inventory inventory,
+            Component title
+    ) {
+        super(menu, inventory, title, 176, 222);
+        this.inventoryLabelY = 129;
     }
 
     @Override
     protected void init() {
         super.init();
 
-        int bx = this.x + this.backgroundWidth + 5;
-        int by = this.y + 18;
+        int bx = this.leftPos + this.imageWidth + 5;
+        int by = this.topPos + 18;
 
-        previous = addDrawableChild(ButtonWidget.builder(Text.literal("<"), button -> click(UniversalStorageScreenHandler.BUTTON_PREVIOUS))
-                .dimensions(bx, by, 24, 20).build());
-        next = addDrawableChild(ButtonWidget.builder(Text.literal(">"), button -> click(UniversalStorageScreenHandler.BUTTON_NEXT))
-                .dimensions(bx + 28, by, 24, 20).build());
+        previous = Button.builder(Component.literal("<"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_PREVIOUS))
+                .bounds(bx, by, 24, 20)
+                .build();
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Sort"), button -> click(UniversalStorageScreenHandler.BUTTON_SORT))
-                .dimensions(bx, by + 28, 72, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Deposit All"), button -> click(UniversalStorageScreenHandler.BUTTON_DEPOSIT_ALL))
-                .dimensions(bx, by + 52, 72, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Loot All"), button -> click(UniversalStorageScreenHandler.BUTTON_LOOT_ALL))
-                .dimensions(bx, by + 76, 72, 20).build());
+        next = Button.builder(Component.literal(">"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_NEXT))
+                .bounds(bx + 28, by, 24, 20)
+                .build();
+
+        addRenderableWidget(previous);
+        addRenderableWidget(next);
+
+        addRenderableWidget(Button.builder(Component.literal("Sort"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_SORT))
+                .bounds(bx, by + 28, 76, 20)
+                .build());
+
+        addRenderableWidget(Button.builder(Component.literal("Deposit All"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_DEPOSIT_ALL))
+                .bounds(bx, by + 52, 76, 20)
+                .build());
+
+        addRenderableWidget(Button.builder(Component.literal("Loot All"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_LOOT_ALL))
+                .bounds(bx, by + 76, 76, 20)
+                .build());
+
+        refreshButtons();
     }
 
-    private void click(int id) {
-        if (client != null && client.interactionManager != null) {
-            client.interactionManager.clickButton(handler.syncId, id);
+    private void press(int buttonId) {
+        if (this.minecraft != null && this.minecraft.gameMode != null) {
+            this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, buttonId);
         }
     }
 
     @Override
-    protected void drawBackground(DrawContext context, float delta, int mouseX, int mouseY) {
-        context.drawTexture(TEXTURE, this.x, this.y, 0, 0, this.backgroundWidth, this.backgroundHeight);
+    protected void containerTick() {
+        super.containerTick();
+        refreshButtons();
+    }
+
+    private void refreshButtons() {
+        if (previous != null) previous.active = menu.getPage() > 0;
+        if (next != null) next.active = menu.getPage() + 1 < menu.getPageCount();
     }
 
     @Override
-    protected void drawForeground(DrawContext context, int mouseX, int mouseY) {
-        super.drawForeground(context, mouseX, mouseY);
-        context.drawText(textRenderer,
-                Text.literal("Page " + (handler.getPage() + 1) + "/" + handler.getPageCount()),
-                backgroundWidth + 6, 6, 0x404040, false);
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractBackground(graphics, mouseX, mouseY, delta);
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                TEXTURE,
+                this.leftPos,
+                this.topPos,
+                0.0F,
+                0.0F,
+                this.imageWidth,
+                this.imageHeight,
+                256,
+                256
+        );
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        if (previous != null) previous.active = handler.getPage() > 0;
-        if (next != null) next.active = handler.getPage() + 1 < handler.getPageCount();
-        renderBackground(context, mouseX, mouseY, delta);
-        super.render(context, mouseX, mouseY, delta);
-        drawMouseoverTooltip(context, mouseX, mouseY);
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        super.extractLabels(graphics, mouseX, mouseY);
+        graphics.text(
+                this.font,
+                Component.literal("Page " + (menu.getPage() + 1) + "/" + menu.getPageCount()),
+                118,
+                6,
+                0x404040,
+                false
+        );
     }
 }

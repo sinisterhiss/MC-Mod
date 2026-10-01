@@ -1,26 +1,20 @@
 package dev.unifiedstorage.storage;
 
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
-/**
- * Client-side backing inventory for the Universal Storage screen.
- *
- * Vanilla SimpleInventory clamps stacks to the item's normal max stack size, which would
- * turn a synchronized 999-item storage stack back into 64/16/1 on the client. This tiny
- * inventory deliberately preserves the server-supplied count up to the Universal Storage cap.
- */
-public final class UniversalStorageClientInventory implements Inventory {
-    private final DefaultedList<ItemStack> stacks;
+/** Client-side mirror of the 54 server-owned storage slots. */
+public final class UniversalStorageClientInventory implements Container {
+    private final NonNullList<ItemStack> stacks;
 
     public UniversalStorageClientInventory(int size) {
-        this.stacks = DefaultedList.ofSize(size, ItemStack.EMPTY);
+        this.stacks = NonNullList.withSize(size, ItemStack.EMPTY);
     }
 
     @Override
-    public int size() {
+    public int getContainerSize() {
         return stacks.size();
     }
 
@@ -33,23 +27,22 @@ public final class UniversalStorageClientInventory implements Inventory {
     }
 
     @Override
-    public ItemStack getStack(int slot) {
+    public ItemStack getItem(int slot) {
         return slot >= 0 && slot < stacks.size() ? stacks.get(slot) : ItemStack.EMPTY;
     }
 
     @Override
-    public ItemStack removeStack(int slot, int amount) {
+    public ItemStack removeItem(int slot, int amount) {
         if (slot < 0 || slot >= stacks.size()) return ItemStack.EMPTY;
         ItemStack stack = stacks.get(slot);
         if (stack.isEmpty()) return ItemStack.EMPTY;
-
         ItemStack removed = stack.split(amount);
         if (stack.isEmpty()) stacks.set(slot, ItemStack.EMPTY);
         return removed;
     }
 
     @Override
-    public ItemStack removeStack(int slot) {
+    public ItemStack removeItemNoUpdate(int slot) {
         if (slot < 0 || slot >= stacks.size()) return ItemStack.EMPTY;
         ItemStack removed = stacks.get(slot);
         stacks.set(slot, ItemStack.EMPTY);
@@ -57,31 +50,32 @@ public final class UniversalStorageClientInventory implements Inventory {
     }
 
     @Override
-    public void setStack(int slot, ItemStack stack) {
+    public void setItem(int slot, ItemStack stack) {
         if (slot < 0 || slot >= stacks.size()) return;
-        if (!stack.isEmpty() && stack.getCount() > UniversalStorageState.MAX_STACK_SIZE) {
-            stack.setCount(UniversalStorageState.MAX_STACK_SIZE);
-        }
         stacks.set(slot, stack);
     }
 
     @Override
-    public int getMaxCountPerStack() {
+    public int getMaxStackSize() {
         return UniversalStorageState.MAX_STACK_SIZE;
     }
 
     @Override
-    public void markDirty() {
-        // Client mirror only; the server owns persistence.
+    public int getMaxStackSize(ItemStack stack) {
+        return UniversalStorageState.MAX_STACK_SIZE;
     }
 
     @Override
-    public boolean canPlayerUse(PlayerEntity player) {
+    public void setChanged() {
+    }
+
+    @Override
+    public boolean stillValid(Player player) {
         return true;
     }
 
     @Override
-    public void clear() {
+    public void clearContent() {
         stacks.clear();
     }
 }

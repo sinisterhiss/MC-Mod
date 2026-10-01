@@ -1,65 +1,60 @@
 package dev.unifiedstorage.storage;
 
-import net.minecraft.datafixer.DataFixTypes;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.PersistentState;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import dev.unifiedstorage.UnifiedStorageMod;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.saveddata.SavedDataType;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
-/**
- * Tracks only containers placed by players. Naturally generated/found containers never enter this set.
- * The state is dimension-local, so identical coordinates in different dimensions are independent.
- */
-public final class TerminalState extends PersistentState {
-    private static final String SAVE_ID = "unifiedstorage_terminals";
-    private final Set<Long> terminalPositions = new HashSet<>();
+/** Tracks player-placed storage terminals for one dimension. */
+public final class TerminalState extends SavedData {
+    private static final Codec<TerminalState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.LONG.listOf().optionalFieldOf("positions", List.of())
+                    .forGetter(state -> new ArrayList<>(state.terminalPositions))
+    ).apply(instance, TerminalState::new));
 
-    private static final Type<TerminalState> TYPE = new Type<>(
+    private static final SavedDataType<TerminalState> TYPE = new SavedDataType<>(
+            Identifier.fromNamespaceAndPath(UnifiedStorageMod.MOD_ID, "terminals"),
             TerminalState::new,
-            TerminalState::fromNbt,
+            CODEC,
             DataFixTypes.LEVEL
     );
 
-    public static TerminalState get(ServerWorld world) {
-        return world.getPersistentStateManager().getOrCreate(TYPE, SAVE_ID);
+    private final Set<Long> terminalPositions = new HashSet<>();
+
+    public TerminalState() {
+    }
+
+    private TerminalState(List<Long> positions) {
+        this.terminalPositions.addAll(positions);
+    }
+
+    public static TerminalState get(ServerLevel level) {
+        return level.getDataStorage().computeIfAbsent(TYPE);
     }
 
     public void mark(BlockPos pos) {
         if (terminalPositions.add(pos.asLong())) {
-            markDirty();
+            setDirty();
         }
     }
 
     public void unmark(BlockPos pos) {
         if (terminalPositions.remove(pos.asLong())) {
-            markDirty();
+            setDirty();
         }
     }
 
     public boolean isTerminal(BlockPos pos) {
         return terminalPositions.contains(pos.asLong());
-    }
-
-    private static TerminalState fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
-        TerminalState state = new TerminalState();
-        for (long packed : nbt.getLongArray("Positions")) {
-            state.terminalPositions.add(packed);
-        }
-        return state;
-    }
-
-    @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
-        long[] positions = new long[terminalPositions.size()];
-        int i = 0;
-        for (long packed : terminalPositions) {
-            positions[i++] = packed;
-        }
-        nbt.putLongArray("Positions", positions);
-        return nbt;
     }
 }
