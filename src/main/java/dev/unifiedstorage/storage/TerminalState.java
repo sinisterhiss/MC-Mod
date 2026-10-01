@@ -21,7 +21,7 @@ public final class TerminalState extends PersistentState {
     private static final Type<TerminalState> TYPE = new Type<>(
             TerminalState::new,
             TerminalState::fromNbt,
-            DataFixTypes.SAVED_DATA
+            DataFixTypes.LEVEL
     );
 
     public static TerminalState get(ServerWorld world) {
