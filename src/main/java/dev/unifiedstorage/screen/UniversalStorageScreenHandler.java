@@ -111,8 +111,15 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
         // Make the vanilla recipe book count Universal Storage as part of the available supply.
         if (state != null && playerId != null) {
+            // Server has the complete backing store, including pages that are not visible.
             for (ItemStack stack : state.items(playerId)) {
                 contents.accountSimpleStack(stack);
+            }
+        } else {
+            // Client knows the currently synchronized storage page. Including it keeps the
+            // vanilla recipe book's craftable indicators useful while this page is visible.
+            for (int i = 0; i < storageInventory.getContainerSize(); i++) {
+                contents.accountSimpleStack(storageInventory.getItem(i));
             }
         }
     }
