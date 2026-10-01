@@ -19,8 +19,8 @@ public final class UnifiedStorageClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             boolean vanillaInventoryOpen =
-                    client.screen instanceof InventoryScreen
-                            || client.screen instanceof CreativeModeInventoryScreen;
+                    client.gui.screen() instanceof InventoryScreen
+                            || client.gui.screen() instanceof CreativeModeInventoryScreen;
 
             if (vanillaInventoryOpen
                     && !vanillaInventoryWasOpen
