@@ -4,28 +4,44 @@ import dev.unifiedstorage.UnifiedStorageMod;
 import dev.unifiedstorage.storage.PagedStorageInventory;
 import dev.unifiedstorage.storage.UniversalStorageClientInventory;
 import dev.unifiedstorage.storage.UniversalStorageState;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.RecipeBookType;
+import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
+public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
     public static final int BUTTON_PREVIOUS = 0;
     public static final int BUTTON_NEXT = 1;
     public static final int BUTTON_SORT = 2;
     public static final int BUTTON_DEPOSIT_ALL = 3;
     public static final int BUTTON_LOOT_ALL = 4;
 
+    private static final int RESULT_SLOT = 0;
+    private static final int CRAFT_SLOT_START = 1;
+    private static final int CRAFT_SLOT_END = 10;
+    private static final int STORAGE_SLOT_START = 10;
     private static final int STORAGE_SLOT_COUNT = 54;
-    private static final int PLAYER_SLOT_START = STORAGE_SLOT_COUNT;
+    private static final int STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT;
+    private static final int PLAYER_SLOT_START = STORAGE_SLOT_END;
     private static final int PLAYER_SLOT_END = PLAYER_SLOT_START + 36;
 
     private final Inventory playerInventory;
@@ -36,8 +52,10 @@ public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
     private final UniversalStorageState state;
     private final UUID playerId;
 
+    private boolean placingRecipe;
+
     public UniversalStorageScreenHandler(int containerId, Inventory playerInventory) {
-        super(UnifiedStorageMod.UNIVERSAL_STORAGE_MENU, containerId);
+        super(UnifiedStorageMod.UNIVERSAL_STORAGE_MENU, containerId, 3, 3);
         this.playerInventory = playerInventory;
 
         if (playerInventory.player instanceof ServerPlayer sp) {
@@ -57,6 +75,9 @@ public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
         }
 
         addDataSlots(this.data);
+
+        addResultSlot(playerInventory.player, 300, 35);
+        addCraftingGridSlots(206, 17);
 
         for (int row = 0; row < 6; row++) {
             for (int col = 0; col < 9; col++) {
@@ -78,6 +99,65 @@ public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
 
     public int getPageCount() {
         return Math.max(1, data.get(1));
+    }
+
+    @Override
+    public void slotsChanged(Container container) {
+        if (!placingRecipe && playerInventory.player.level() instanceof ServerLevel level) {
+            updateCraftingResult(this, level, playerInventory.player, craftSlots, resultSlots, null);
+        }
+    }
+
+    private static void updateCraftingResult(
+            AbstractCraftingMenu menu,
+            ServerLevel level,
+            Player player,
+            CraftingContainer container,
+            ResultContainer resultSlots,
+            @Nullable RecipeHolder<CraftingRecipe> recipeHint
+    ) {
+        CraftingInput input = container.asCraftInput();
+        ServerPlayer serverPlayer = (ServerPlayer) player;
+        ItemStack result = ItemStack.EMPTY;
+
+        Optional<RecipeHolder<CraftingRecipe>> maybeRecipe =
+                level.getServer().getRecipeManager().getRecipeFor(
+                        RecipeType.CRAFTING,
+                        input,
+                        level,
+                        recipeHint
+                );
+
+        if (maybeRecipe.isPresent()) {
+            RecipeHolder<CraftingRecipe> recipeHolder = maybeRecipe.get();
+            CraftingRecipe recipe = recipeHolder.value();
+            if (resultSlots.setRecipeUsed(serverPlayer, recipeHolder)) {
+                ItemStack assembled = recipe.assemble(input);
+                if (assembled.isItemEnabled(level.enabledFeatures())) {
+                    result = assembled;
+                }
+            }
+        }
+
+        resultSlots.setItem(0, result);
+        menu.setRemoteSlot(0, result);
+        serverPlayer.connection.send(new ClientboundContainerSetSlotPacket(
+                menu.containerId,
+                menu.incrementStateId(),
+                0,
+                result
+        ));
+    }
+
+    @Override
+    protected void beginPlacingRecipe() {
+        placingRecipe = true;
+    }
+
+    @Override
+    protected void finishPlacingRecipe(ServerLevel level, RecipeHolder<CraftingRecipe> recipe) {
+        placingRecipe = false;
+        updateCraftingResult(this, level, playerInventory.player, craftSlots, resultSlots, recipe);
     }
 
     @Override
@@ -169,34 +249,78 @@ public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
         Slot slot = slots.get(slotIndex);
         if (!slot.hasItem()) return ItemStack.EMPTY;
 
-        ItemStack source = slot.getItem();
-        ItemStack original = source.copy();
+        ItemStack stack = slot.getItem();
+        ItemStack original = stack.copy();
 
-        if (slotIndex < STORAGE_SLOT_COUNT) {
-            if (!moveItemStackTo(source, PLAYER_SLOT_START, PLAYER_SLOT_END, false)) {
+        if (slotIndex == RESULT_SLOT) {
+            stack.getItem().onCraftedBy(stack, player);
+            moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, true);
+
+            if (!stack.isEmpty() && serverPlayer != null) {
+                state.insert(playerId, stack);
+            }
+            if (!stack.isEmpty()) return ItemStack.EMPTY;
+
+            slot.onQuickCraft(stack, original);
+        } else if (slotIndex >= CRAFT_SLOT_START && slotIndex < CRAFT_SLOT_END) {
+            moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, false);
+
+            if (!stack.isEmpty() && serverPlayer != null) {
+                state.insert(playerId, stack);
+            }
+            if (!stack.isEmpty()) return ItemStack.EMPTY;
+        } else if (slotIndex >= STORAGE_SLOT_START && slotIndex < STORAGE_SLOT_END) {
+            if (!moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, false)) {
                 return ItemStack.EMPTY;
             }
-
-            if (source.isEmpty()) slot.set(ItemStack.EMPTY);
-            else slot.setChanged();
-
-            if (serverPlayer != null) {
-                state.trimTrailingEmpty(playerId);
-                refreshPage();
-            }
-        } else {
+        } else if (slotIndex >= PLAYER_SLOT_START && slotIndex < PLAYER_SLOT_END) {
             if (serverPlayer == null) return ItemStack.EMPTY;
 
-            ItemStack moving = source.copy();
+            ItemStack moving = stack.copy();
             state.insert(playerId, moving);
             if (!moving.isEmpty()) return ItemStack.EMPTY;
 
-            slot.set(ItemStack.EMPTY);
+            stack.setCount(0);
+        }
+
+        if (stack.isEmpty()) {
+            slot.setByPlayer(ItemStack.EMPTY);
+        } else {
             slot.setChanged();
+        }
+
+        if (stack.getCount() == original.getCount()) {
+            return ItemStack.EMPTY;
+        }
+
+        slot.onTake(player, stack);
+
+        if (serverPlayer != null) {
+            state.trimTrailingEmpty(playerId);
             refreshPage();
         }
 
         return original;
+    }
+
+    @Override
+    public Slot getResultSlot() {
+        return slots.get(RESULT_SLOT);
+    }
+
+    @Override
+    public List<Slot> getInputGridSlots() {
+        return slots.subList(CRAFT_SLOT_START, CRAFT_SLOT_END);
+    }
+
+    @Override
+    public RecipeBookType getRecipeBookType() {
+        return RecipeBookType.CRAFTING;
+    }
+
+    @Override
+    protected Player owner() {
+        return playerInventory.player;
     }
 
     @Override
@@ -207,8 +331,24 @@ public final class UniversalStorageScreenHandler extends AbstractContainerMenu {
     @Override
     public void removed(Player player) {
         super.removed(player);
-        if (serverPlayer != null) {
+
+        if (player instanceof ServerPlayer) {
+            for (int i = 0; i < craftSlots.getContainerSize(); i++) {
+                ItemStack stack = craftSlots.removeItemNoUpdate(i);
+                if (stack.isEmpty()) continue;
+
+                playerInventory.add(stack);
+                if (!stack.isEmpty()) {
+                    state.insert(playerId, stack);
+                }
+            }
+
+            resultSlots.clearContent();
             state.trimTrailingEmpty(playerId);
+            playerInventory.setChanged();
+        } else {
+            craftSlots.clearContent();
+            resultSlots.clearContent();
         }
     }
 }
