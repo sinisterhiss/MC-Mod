@@ -3,10 +3,13 @@ package dev.unifiedstorage.storage;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import dev.unifiedstorage.UnifiedStorageMod;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
@@ -78,6 +81,49 @@ public final class UniversalStorageState extends SavedData {
     public int pageCount(UUID playerId, int pageSize) {
         int last = lastOccupiedIndex(playerId);
         return Math.max(1, (last + pageSize) / pageSize);
+    }
+
+    /**
+     * Removes up to count items chosen by vanilla's recipe book from Universal Storage.
+     * Vanilla always tries the player's normal inventory first; this is only the fallback.
+     *
+     * If a crafting-grid slot already contains something, component data must match exactly.
+     */
+    public ItemStack takeForCrafting(
+            UUID playerId,
+            Holder<Item> wantedItem,
+            ItemStack existingGridStack,
+            int count
+    ) {
+        if (count <= 0) return ItemStack.EMPTY;
+
+        List<ItemStack> storedItems = items(playerId);
+        for (int i = 0; i < storedItems.size(); i++) {
+            ItemStack stored = storedItems.get(i);
+            if (stored.isEmpty()) continue;
+            if (!stored.typeHolder().equals(wantedItem)) continue;
+
+            // Match vanilla recipe-book ingredient-selection rules.
+            if (!Inventory.isUsableForCrafting(stored)) continue;
+
+            if (!existingGridStack.isEmpty()
+                    && !ItemStack.isSameItemSameComponents(existingGridStack, stored)) {
+                continue;
+            }
+
+            int moved = Math.min(count, stored.getCount());
+            ItemStack taken = stored.copyWithCount(moved);
+            stored.shrink(moved);
+            if (stored.isEmpty()) {
+                storedItems.set(i, ItemStack.EMPTY);
+            }
+
+            trimTrailingEmpty(playerId);
+            setDirty();
+            return taken;
+        }
+
+        return ItemStack.EMPTY;
     }
 
     /**
