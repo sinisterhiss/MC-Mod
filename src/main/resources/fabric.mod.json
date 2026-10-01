@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "unifiedstorage",
+  "version": "${version}",
+  "name": "Unified Storage",
+  "description": "Player-placed chests and barrels open one universal per-player storage inventory, with exact-item stacks up to 999 in storage and player inventory.",
+  "authors": ["OpenAI + user"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["dev.unifiedstorage.UnifiedStorageMod"],
+    "client": ["dev.unifiedstorage.client.UnifiedStorageClient"]
+  },
+  "mixins": ["unifiedstorage.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
