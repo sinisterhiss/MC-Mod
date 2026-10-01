@@ -60,7 +60,7 @@ public final class UniversalStorageState extends SavedData {
     }
 
     public static UniversalStorageState get(ServerPlayer player) {
-        return player.getServer().getDataStorage().computeIfAbsent(TYPE);
+        return player.level().getServer().getDataStorage().computeIfAbsent(TYPE);
     }
 
     public List<ItemStack> items(UUID playerId) {
