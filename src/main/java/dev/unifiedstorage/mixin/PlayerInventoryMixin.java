@@ -1,11 +1,15 @@
 package dev.unifiedstorage.mixin;
 
 import dev.unifiedstorage.storage.UniversalStorageState;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -19,6 +23,25 @@ public abstract class PlayerInventoryMixin {
 
     public int getMaxStackSize(ItemStack stack) {
         return UniversalStorageState.MAX_STACK_SIZE;
+    }
+
+    /**
+     * While a vanilla crafting menu is open, recipe-book availability counts Universal Storage
+     * as an ingredient source. Player inventory still gets consumed first.
+     */
+    @Inject(method = "fillStackedContents", at = @At("TAIL"))
+    private void unifiedstorage$includeStorageInCraftingAvailability(
+            StackedItemContents contents,
+            CallbackInfo ci
+    ) {
+        Inventory inventory = (Inventory) (Object) this;
+        if (!(inventory.player instanceof ServerPlayer serverPlayer)) return;
+        if (!(serverPlayer.containerMenu instanceof AbstractCraftingMenu)) return;
+
+        UniversalStorageState storage = UniversalStorageState.get(serverPlayer);
+        for (ItemStack stack : storage.items(serverPlayer.getUUID())) {
+            contents.accountSimpleStack(stack);
+        }
     }
 
     @Inject(method = "add(ILnet/minecraft/world/item/ItemStack;)Z", at = @At("HEAD"), cancellable = true)
