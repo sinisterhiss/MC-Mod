@@ -27,6 +27,8 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
     private Button sort;
     private Button deposit;
     private Button loot;
+    private Button storeMatches;
+    private Button takeMatches;
 
     public UniversalStorageScreen(
             UniversalStorageScreenHandler menu,
@@ -43,31 +45,43 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
         previous = addRenderableWidget(Button.builder(
                         Component.literal("<"),
                         button -> press(UniversalStorageScreenHandler.BUTTON_PREVIOUS))
-                .bounds(0, 0, 18, 20)
+                .bounds(0, 0, 18, 14)
                 .build());
 
         next = addRenderableWidget(Button.builder(
                         Component.literal(">"),
                         button -> press(UniversalStorageScreenHandler.BUTTON_NEXT))
-                .bounds(0, 0, 18, 20)
+                .bounds(0, 0, 18, 14)
                 .build());
 
         sort = addRenderableWidget(Button.builder(
                         Component.literal("Sort"),
                         button -> press(UniversalStorageScreenHandler.BUTTON_SORT))
-                .bounds(0, 0, 34, 20)
+                .bounds(0, 0, 34, 14)
                 .build());
 
         deposit = addRenderableWidget(Button.builder(
                         Component.literal("Deposit"),
                         button -> press(UniversalStorageScreenHandler.BUTTON_DEPOSIT_ALL))
-                .bounds(0, 0, 48, 20)
+                .bounds(0, 0, 48, 14)
                 .build());
 
         loot = addRenderableWidget(Button.builder(
                         Component.literal("Loot"),
                         button -> press(UniversalStorageScreenHandler.BUTTON_LOOT_ALL))
-                .bounds(0, 0, 42, 20)
+                .bounds(0, 0, 42, 14)
+                .build());
+
+        storeMatches = addRenderableWidget(Button.builder(
+                        Component.literal("Store Matches"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_STORE_MATCHES))
+                .bounds(0, 0, 82, 14)
+                .build());
+
+        takeMatches = addRenderableWidget(Button.builder(
+                        Component.literal("Take Matches"),
+                        button -> press(UniversalStorageScreenHandler.BUTTON_TAKE_MATCHES))
+                .bounds(0, 0, 82, 14)
                 .build());
 
         positionStorageButtons();
@@ -88,13 +102,17 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
         if (previous == null) return;
 
         int x = this.leftPos + STORAGE_X + 6;
-        int y = this.topPos + 138;
+        int y1 = this.topPos + 134;
+        int y2 = this.topPos + 150;
 
-        previous.setPosition(x, y);
-        next.setPosition(x + 20, y);
-        sort.setPosition(x + 42, y);
-        deposit.setPosition(x + 78, y);
-        loot.setPosition(x + 128, y);
+        previous.setPosition(x, y1);
+        next.setPosition(x + 20, y1);
+        sort.setPosition(x + 40, y1);
+        deposit.setPosition(x + 76, y1);
+        loot.setPosition(x + 126, y1);
+
+        storeMatches.setPosition(x, y2);
+        takeMatches.setPosition(x + 86, y2);
     }
 
     private void press(int buttonId) {
@@ -118,7 +136,6 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractBackground(graphics, mouseX, mouseY, delta);
 
-        // Center: unchanged vanilla crafting-table panel.
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED,
                 CRAFTING_TEXTURE,
@@ -132,7 +149,6 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
                 256
         );
 
-        // Narrow gear strip keeps armor/offhand management available from E.
         int gearX = this.leftPos + CRAFTING_WIDTH;
         graphics.fill(
                 gearX,
@@ -150,7 +166,6 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
                 false
         );
 
-        // Right: full Universal Storage.
         int storageX = this.leftPos + STORAGE_X;
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED,
