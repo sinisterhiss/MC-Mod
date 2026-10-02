@@ -17,6 +17,8 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
             Identifier.withDefaultNamespace("textures/gui/container/generic_54.png");
 
     private static final int CRAFTING_WIDTH = 176;
+    private static final int EQUIPMENT_STRIP_WIDTH = 28;
+    private static final int STORAGE_X = CRAFTING_WIDTH + EQUIPMENT_STRIP_WIDTH;
     private static final int STORAGE_WIDTH = 176;
     private static final int STORAGE_BACKGROUND_HEIGHT = 132;
 
@@ -74,21 +76,18 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
 
     @Override
     protected ScreenPosition getRecipeBookButtonPosition() {
-        // Same location as the vanilla crafting-table screen.
         return new ScreenPosition(this.leftPos + 5, this.height / 2 - 49);
     }
 
     @Override
     protected void onRecipeBookButtonClick() {
-        // Opening/closing the vanilla recipe book can move the centered crafting panel.
-        // Keep the Universal Storage controls attached to its right edge.
         positionStorageButtons();
     }
 
     private void positionStorageButtons() {
         if (previous == null) return;
 
-        int x = this.leftPos + CRAFTING_WIDTH + 6;
+        int x = this.leftPos + STORAGE_X + 6;
         int y = this.topPos + 138;
 
         previous.setPosition(x, y);
@@ -119,7 +118,7 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractBackground(graphics, mouseX, mouseY, delta);
 
-        // Vanilla crafting-table panel stays centered exactly as normal.
+        // Center: unchanged vanilla crafting-table panel.
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED,
                 CRAFTING_TEXTURE,
@@ -133,8 +132,26 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
                 256
         );
 
-        // Universal Storage is an attached panel to the right.
-        int storageX = this.leftPos + CRAFTING_WIDTH;
+        // Narrow gear strip keeps armor/offhand management available from E.
+        int gearX = this.leftPos + CRAFTING_WIDTH;
+        graphics.fill(
+                gearX,
+                this.topPos,
+                gearX + EQUIPMENT_STRIP_WIDTH,
+                this.topPos + this.imageHeight,
+                0xFFC6C6C6
+        );
+        graphics.text(
+                this.font,
+                Component.literal("Gear"),
+                CRAFTING_WIDTH + 2,
+                6,
+                0x404040,
+                false
+        );
+
+        // Right: full Universal Storage.
+        int storageX = this.leftPos + STORAGE_X;
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED,
                 STORAGE_TEXTURE,
@@ -148,7 +165,6 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
                 256
         );
 
-        // Plain vanilla-style backing for the storage controls below the six rows.
         graphics.fill(
                 storageX,
                 this.topPos + STORAGE_BACKGROUND_HEIGHT,
@@ -160,13 +176,12 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        // Keeps the normal "Crafting" and "Inventory" labels on the center panel.
         super.extractLabels(graphics, mouseX, mouseY);
 
         graphics.text(
                 this.font,
                 Component.literal("Universal Storage"),
-                CRAFTING_WIDTH + 8,
+                STORAGE_X + 8,
                 6,
                 0x404040,
                 false
@@ -175,7 +190,7 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
         graphics.text(
                 this.font,
                 Component.literal("Page " + (menu.getPage() + 1) + "/" + menu.getPageCount()),
-                CRAFTING_WIDTH + 130,
+                STORAGE_X + 130,
                 6,
                 0x404040,
                 false
@@ -184,13 +199,13 @@ public final class UniversalStorageScreen extends AbstractRecipeBookScreen<Unive
 
     @Override
     protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
-        boolean insideStorage =
+        boolean insideExtraPanels =
                 mouseX >= this.leftPos + CRAFTING_WIDTH
-                        && mouseX < this.leftPos + CRAFTING_WIDTH + STORAGE_WIDTH
+                        && mouseX < this.leftPos + STORAGE_X + STORAGE_WIDTH
                         && mouseY >= this.topPos
                         && mouseY < this.topPos + this.imageHeight;
 
-        if (insideStorage) {
+        if (insideExtraPanels) {
             return false;
         }
 
