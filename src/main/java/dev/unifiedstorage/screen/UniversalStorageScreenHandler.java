@@ -5,15 +5,19 @@ import dev.unifiedstorage.storage.PagedStorageInventory;
 import dev.unifiedstorage.storage.UniversalStorageClientInventory;
 import dev.unifiedstorage.storage.UniversalStorageState;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.StackedItemContents;
 import net.minecraft.world.inventory.AbstractCraftingMenu;
+import net.minecraft.world.inventory.ArmorSlot;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.RecipeBookType;
 import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.SimpleContainerData;
@@ -39,13 +43,21 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
     private static final int RESULT_SLOT = 0;
     private static final int CRAFT_SLOT_START = 1;
     private static final int CRAFT_SLOT_END = 10;
-    private static final int STORAGE_SLOT_START = 10;
-    private static final int STORAGE_SLOT_COUNT = 54;
-    private static final int STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT;
-    private static final int PLAYER_SLOT_START = STORAGE_SLOT_END;
+
+    private static final int PLAYER_SLOT_START = 10;
     private static final int PLAYER_SLOT_END = PLAYER_SLOT_START + 36;
 
-    private static final int STORAGE_X = 176;
+    private static final int ARMOR_SLOT_START = PLAYER_SLOT_END;
+    private static final int ARMOR_SLOT_END = ARMOR_SLOT_START + 4;
+    private static final int OFFHAND_MENU_SLOT = ARMOR_SLOT_END;
+    private static final int EQUIPMENT_SLOT_END = OFFHAND_MENU_SLOT + 1;
+
+    private static final int STORAGE_SLOT_START = EQUIPMENT_SLOT_END;
+    private static final int STORAGE_SLOT_COUNT = 54;
+    private static final int STORAGE_SLOT_END = STORAGE_SLOT_START + STORAGE_SLOT_COUNT;
+
+    private static final int EQUIPMENT_X = 181;
+    private static final int STORAGE_X = 204;
 
     private final Inventory playerInventory;
     private final Container storageInventory;
@@ -79,12 +91,51 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
         addDataSlots(this.data);
 
-        // Vanilla crafting-table layout in the normal 176px panel.
+        // Keep the normal crafting-table layout and player inventory in the center panel.
         addResultSlot(playerInventory.player, 124, 35);
         addCraftingGridSlots(30, 17);
         addStandardInventorySlots(playerInventory, 8, 84);
 
-        // Universal Storage lives immediately to the right of the normal crafting panel.
+        // Compact equipment strip between crafting and Universal Storage.
+        EquipmentSlot[] armorSlots = new EquipmentSlot[]{
+                EquipmentSlot.HEAD,
+                EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS,
+                EquipmentSlot.FEET
+        };
+        Identifier[] armorIcons = new Identifier[]{
+                InventoryMenu.EMPTY_ARMOR_SLOT_HELMET,
+                InventoryMenu.EMPTY_ARMOR_SLOT_CHESTPLATE,
+                InventoryMenu.EMPTY_ARMOR_SLOT_LEGGINGS,
+                InventoryMenu.EMPTY_ARMOR_SLOT_BOOTS
+        };
+
+        for (int i = 0; i < armorSlots.length; i++) {
+            addSlot(new ArmorSlot(
+                    playerInventory,
+                    playerInventory.player,
+                    armorSlots[i],
+                    39 - i,
+                    EQUIPMENT_X,
+                    18 + i * 18,
+                    armorIcons[i]
+            ));
+        }
+
+        addSlot(new Slot(playerInventory, Inventory.SLOT_OFFHAND, EQUIPMENT_X, 96) {
+            @Override
+            public void setByPlayer(ItemStack itemStack, ItemStack previous) {
+                playerInventory.player.onEquipItem(EquipmentSlot.OFFHAND, previous, itemStack);
+                super.setByPlayer(itemStack, previous);
+            }
+
+            @Override
+            public Identifier getNoItemIcon() {
+                return InventoryMenu.EMPTY_ARMOR_SLOT_SHIELD;
+            }
+        });
+
+        // Universal Storage remains a full six-row panel on the right.
         for (int row = 0; row < 6; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlot(new UniversalStorageSlot(
@@ -109,15 +160,11 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
     public void fillCraftSlotsStackedContents(StackedItemContents contents) {
         super.fillCraftSlotsStackedContents(contents);
 
-        // Make the vanilla recipe book count Universal Storage as part of the available supply.
         if (state != null && playerId != null) {
-            // Server has the complete backing store, including pages that are not visible.
             for (ItemStack stack : state.items(playerId)) {
                 contents.accountSimpleStack(stack);
             }
         } else {
-            // Client knows the currently synchronized storage page. Including it keeps the
-            // vanilla recipe book's craftable indicators useful while this page is visible.
             for (int i = 0; i < storageInventory.getContainerSize(); i++) {
                 contents.accountSimpleStack(storageInventory.getItem(i));
             }
@@ -265,6 +312,19 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
         playerInventory.setChanged();
     }
 
+    private boolean moveToStorage(ItemStack stack) {
+        if (serverPlayer == null) return false;
+
+        int before = stack.getCount();
+        ItemStack moving = stack.copy();
+        state.insert(playerId, moving);
+        int moved = before - moving.getCount();
+
+        if (moved <= 0) return false;
+        stack.shrink(moved);
+        return true;
+    }
+
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {
         if (slotIndex < 0 || slotIndex >= slots.size()) return ItemStack.EMPTY;
@@ -277,37 +337,38 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
         if (slotIndex == RESULT_SLOT) {
             stack.getItem().onCraftedBy(stack, player);
-            moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, true);
 
-            if (!stack.isEmpty() && serverPlayer != null) {
-                state.insert(playerId, stack);
+            moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, true);
+            if (!stack.isEmpty()) {
+                moveToStorage(stack);
             }
             if (!stack.isEmpty()) return ItemStack.EMPTY;
 
             slot.onQuickCraft(stack, original);
         } else if (slotIndex >= CRAFT_SLOT_START && slotIndex < CRAFT_SLOT_END) {
             moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, false);
-
-            if (!stack.isEmpty() && serverPlayer != null) {
-                state.insert(playerId, stack);
+            if (!stack.isEmpty()) {
+                moveToStorage(stack);
             }
             if (!stack.isEmpty()) return ItemStack.EMPTY;
+        } else if (slotIndex >= PLAYER_SLOT_START && slotIndex < PLAYER_SLOT_END) {
+            if (!moveToStorage(stack)) {
+                return ItemStack.EMPTY;
+            }
+        } else if (slotIndex >= ARMOR_SLOT_START && slotIndex < EQUIPMENT_SLOT_END) {
+            if (!moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, false)) {
+                if (!moveToStorage(stack)) {
+                    return ItemStack.EMPTY;
+                }
+            }
         } else if (slotIndex >= STORAGE_SLOT_START && slotIndex < STORAGE_SLOT_END) {
             if (!moveItemStackTo(stack, PLAYER_SLOT_START, PLAYER_SLOT_END, false)) {
                 return ItemStack.EMPTY;
             }
-        } else if (slotIndex >= PLAYER_SLOT_START && slotIndex < PLAYER_SLOT_END) {
-            if (serverPlayer == null) return ItemStack.EMPTY;
-
-            ItemStack moving = stack.copy();
-            state.insert(playerId, moving);
-            if (!moving.isEmpty()) return ItemStack.EMPTY;
-
-            stack.setCount(0);
         }
 
         if (stack.isEmpty()) {
-            slot.setByPlayer(ItemStack.EMPTY);
+            slot.setByPlayer(ItemStack.EMPTY, original);
         } else {
             slot.setChanged();
         }
