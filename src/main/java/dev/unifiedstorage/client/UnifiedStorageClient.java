@@ -2,6 +2,7 @@ package dev.unifiedstorage.client;
 
 import dev.unifiedstorage.UnifiedStorageMod;
 import dev.unifiedstorage.net.OpenUnifiedCraftingPayload;
+import dev.unifiedstorage.screen.FoundContainerScreen;
 import dev.unifiedstorage.screen.StorageTerminalScreen;
 import dev.unifiedstorage.screen.UniversalStorageScreen;
 import net.fabricmc.api.ClientModInitializer;
@@ -18,6 +19,8 @@ public final class UnifiedStorageClient implements ClientModInitializer {
     public void onInitializeClient() {
         MenuScreens.register(UnifiedStorageMod.UNIVERSAL_STORAGE_MENU, UniversalStorageScreen::new);
         MenuScreens.register(UnifiedStorageMod.STORAGE_TERMINAL_MENU, StorageTerminalScreen::new);
+        MenuScreens.register(UnifiedStorageMod.FOUND_CONTAINER_3_MENU, FoundContainerScreen::new);
+        MenuScreens.register(UnifiedStorageMod.FOUND_CONTAINER_6_MENU, FoundContainerScreen::new);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             boolean vanillaInventoryOpen =
