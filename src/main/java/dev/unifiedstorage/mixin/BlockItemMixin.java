@@ -3,6 +3,7 @@ package dev.unifiedstorage.mixin;
 import dev.unifiedstorage.UnifiedStorageMod;
 import dev.unifiedstorage.storage.TerminalState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
@@ -25,10 +26,22 @@ public abstract class BlockItemMixin {
         if (!(context.getLevel() instanceof ServerLevel serverLevel)) return;
         if (context.getPlayer() == null) return;
 
-        BlockPos pos = context.getClickedPos();
-        BlockState placed = serverLevel.getBlockState(pos);
-        if (UnifiedStorageMod.isSupportedContainer(placed)) {
-            TerminalState.get(serverLevel).mark(pos);
+        // For ordinary placements getClickedPos is already the placed position. A few blocks can
+        // update the placement context internally, so also check the adjacent face position.
+        BlockPos clicked = context.getClickedPos();
+        if (markIfSupported(serverLevel, clicked)) return;
+
+        Direction face = context.getClickedFace();
+        markIfSupported(serverLevel, clicked.relative(face));
+    }
+
+    private static boolean markIfSupported(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (!UnifiedStorageMod.isSupportedContainer(state)) {
+            return false;
         }
+
+        TerminalState.get(level).mark(pos);
+        return true;
     }
 }
