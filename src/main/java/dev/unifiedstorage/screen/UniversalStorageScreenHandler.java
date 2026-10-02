@@ -39,6 +39,8 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
     public static final int BUTTON_SORT = 2;
     public static final int BUTTON_DEPOSIT_ALL = 3;
     public static final int BUTTON_LOOT_ALL = 4;
+    public static final int BUTTON_STORE_MATCHES = 5;
+    public static final int BUTTON_TAKE_MATCHES = 6;
 
     private static final int RESULT_SLOT = 0;
     private static final int CRAFT_SLOT_START = 1;
@@ -261,6 +263,16 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
                 refreshPage();
                 return true;
             }
+            case BUTTON_STORE_MATCHES -> {
+                storeMatching();
+                refreshPage();
+                return true;
+            }
+            case BUTTON_TAKE_MATCHES -> {
+                takeMatching();
+                refreshPage();
+                return true;
+            }
             default -> {
                 return false;
             }
@@ -310,6 +322,57 @@ public final class UniversalStorageScreenHandler extends AbstractCraftingMenu {
 
         state.trimTrailingEmpty(playerId);
         playerInventory.setChanged();
+    }
+
+    private void storeMatching() {
+        List<ItemStack> existingStorage = state.items(playerId).stream()
+                .filter(stack -> !stack.isEmpty())
+                .map(ItemStack::copy)
+                .toList();
+
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            ItemStack stack = playerInventory.getItem(i);
+            if (stack.isEmpty() || !matchesAny(existingStorage, stack)) continue;
+
+            ItemStack moving = stack.copy();
+            state.insert(playerId, moving);
+
+            if (moving.isEmpty()) playerInventory.setItem(i, ItemStack.EMPTY);
+            else playerInventory.setItem(i, moving);
+        }
+
+        playerInventory.setChanged();
+    }
+
+    private void takeMatching() {
+        List<ItemStack> playerTemplates = new java.util.ArrayList<>();
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            ItemStack stack = playerInventory.getItem(i);
+            if (!stack.isEmpty()) playerTemplates.add(stack.copy());
+        }
+
+        if (playerTemplates.isEmpty()) return;
+
+        List<ItemStack> stored = state.items(playerId);
+        for (int i = 0; i < stored.size(); i++) {
+            ItemStack source = stored.get(i);
+            if (source.isEmpty() || !matchesAny(playerTemplates, source)) continue;
+
+            playerInventory.add(source);
+            if (source.isEmpty()) stored.set(i, ItemStack.EMPTY);
+        }
+
+        state.trimTrailingEmpty(playerId);
+        playerInventory.setChanged();
+    }
+
+    private static boolean matchesAny(List<ItemStack> templates, ItemStack candidate) {
+        for (ItemStack template : templates) {
+            if (ItemStack.isSameItemSameComponents(template, candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean moveToStorage(ItemStack stack) {
