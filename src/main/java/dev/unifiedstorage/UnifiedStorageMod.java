@@ -1,6 +1,7 @@
 package dev.unifiedstorage;
 
 import dev.unifiedstorage.net.ModNetworking;
+import dev.unifiedstorage.screen.StorageTerminalScreenHandler;
 import dev.unifiedstorage.screen.UniversalStorageScreenHandler;
 import dev.unifiedstorage.storage.TerminalState;
 import net.fabricmc.api.ModInitializer;
@@ -31,6 +32,13 @@ public final class UnifiedStorageMod implements ModInitializer {
                     new MenuType<>(UniversalStorageScreenHandler::new, FeatureFlagSet.of())
             );
 
+    public static final MenuType<StorageTerminalScreenHandler> STORAGE_TERMINAL_MENU =
+            Registry.register(
+                    BuiltInRegistries.MENU,
+                    Identifier.fromNamespaceAndPath(MOD_ID, "storage_terminal"),
+                    new MenuType<>(StorageTerminalScreenHandler::new, FeatureFlagSet.of())
+            );
+
     @Override
     public void onInitialize() {
         ModNetworking.init();
@@ -57,7 +65,7 @@ public final class UnifiedStorageMod implements ModInitializer {
                 return InteractionResult.PASS;
             }
 
-            openUnifiedCrafting(serverPlayer);
+            openUniversalStorage(serverPlayer);
             return InteractionResult.SUCCESS_SERVER;
         });
 
@@ -73,6 +81,14 @@ public final class UnifiedStorageMod implements ModInitializer {
                 (containerId, inventory, openingPlayer) ->
                         new UniversalStorageScreenHandler(containerId, inventory),
                 Component.translatable("container.crafting")
+        ));
+    }
+
+    public static void openUniversalStorage(ServerPlayer player) {
+        player.openMenu(new SimpleMenuProvider(
+                (containerId, inventory, openingPlayer) ->
+                        new StorageTerminalScreenHandler(containerId, inventory),
+                Component.literal("Universal Storage")
         ));
     }
 
